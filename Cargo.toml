@@ -4,3 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+matrix_kit = "0.1.9"
+minilp = "0.2.2"
