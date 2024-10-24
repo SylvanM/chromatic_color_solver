@@ -104,15 +104,15 @@ fn main() {
         (1, 2), (2, 3), (3, 4), (4, 5), (5, 1)
     ]);
 
-    let mut problem = Problem::new(OptimizationDirection::Minimize);
+    let mut primal = Problem::new(OptimizationDirection::Minimize);
 
     // we will have a "vector" of variables, each associated with an independent set of vertices.
-    let mut vars = HashMap::<usize, Variable>::new();
+    let mut primal_vars = HashMap::<usize, Variable>::new();
     
     for independent_set in graph.independent_sets() {
         // We will turn this independent set into a bit pattern where a 1 means we choose that vertex
         let bit_pattern = set_to_bp(independent_set);
-        vars.insert(bit_pattern, problem.add_var(1.0, (0.0, f64::INFINITY))); // Our objective function is just the sum of our variables
+        primal_vars.insert(bit_pattern, primal.add_var(1.0, (0.0, f64::INFINITY))); // Our objective function is just the sum of our variables
     }
     
     // Now, we add the constraint to make sure every vertex is covered.
@@ -124,13 +124,49 @@ fn main() {
 
         for ind_set in ind_sets_with_v {
             println!("\tAdding term to sum for node {:?}: x_{:?}", v, ind_set);
-            sum.push((*vars.get(&set_to_bp(ind_set)).unwrap(), 1.0));
-            println!("\t\tPushed: {:?}", sum.last())
+            sum.push((*primal_vars.get(&set_to_bp(ind_set)).unwrap(), 1.0));
         }
 
-        problem.add_constraint(sum, ComparisonOp::Ge, 1.0);
+        primal.add_constraint(sum, ComparisonOp::Ge, 1.0);
     }
 
-    let solution = problem.solve().unwrap();
-    println!("Optimal Value: {:?}", solution.objective());
+    let primal_solution = primal.solve().unwrap();
+    println!("---- PRIMAL Solution ----");
+    println!("Optimal Value: {:?}", primal_solution.objective());
+
+    for ind_set in graph.independent_sets() {
+        let bit_pattern = set_to_bp(ind_set.clone());
+        let variable = *primal_vars.get(&bit_pattern).unwrap();
+        println!("Set {:?} is weighted: {:?}", ind_set, primal_solution[variable]);
+    }
+
+    // Now, we define the dual!
+
+    let mut dual = Problem::new(OptimizationDirection::Maximize);
+
+    // we have a primal variable y_v for every vertex in our graph
+    let mut dual_vars = Vec::new();
+    for _ in 0..6 {
+        dual_vars.push(dual.add_var(1.0, (0.0, f64::INFINITY)));
+    }
+
+    // Now, we add a constraint for every independent set
+    for ind_set in graph.independent_sets() {
+        let mut sum = Vec::new();
+
+        for v in ind_set {
+            sum.push((dual_vars[v], 1.0));
+        }
+
+        dual.add_constraint(sum, ComparisonOp::Le, 1.0);
+    }
+
+    let dual_solution = dual.solve().unwrap();
+
+    println!("---- DUAL Solution ----");
+    println!("Optimal Value: {:?}", dual_solution.objective());
+
+    for v in 0..6 {
+        println!("Vertex {:?} is weighted: {:?}", v, dual_solution[dual_vars[v]])
+    }
 }
